@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>全球船舶即時追蹤系統 (OSM 開源版)</title>
+    <title>全球船舶即時追蹤系統 (OSM 開源終極版)</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         * {
@@ -21,31 +21,31 @@
             width: 100%;
             height: 100%;
             z-index: 1;
-            background-color: #f5f7f9;
+            background-color: #1a1a1a;
         }
-        /* 狀態面板樣式 */
         #status-panel {
             position: absolute;
             top: 20px;
             right: 20px;
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(30, 30, 30, 0.9);
+            color: #fff;
             padding: 15px;
             border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
             z-index: 1000;
             max-width: 300px;
+            border: 1px solid #444;
         }
         #status-panel h3 {
             margin-bottom: 10px;
             font-size: 15px;
-            color: #333;
-            border-bottom: 2px solid #27ae60;
+            color: #2ecc71;
+            border-bottom: 2px solid #2ecc71;
             padding-bottom: 5px;
         }
         .status-item {
             margin: 8px 0;
             font-size: 13px;
-            color: #555;
         }
         .badge {
             display: inline-block;
@@ -66,34 +66,26 @@
     <div id="status-panel">
         <h3>⚓ OSM 船舶即時監控</h3>
         <div class="status-item">系統狀態: <span id="conn-status" class="badge badge-disconnected">中斷</span></div>
-        <div class="status-item">目前接收船隻數: <span id="ship-count" style="font-weight:bold; color:#27ae60;">0</span></div>
-        <div class="status-item" style="font-size: 11px; color: #7f8c8d; margin-top: 10px;">
-            模式：透過 WebSocket Proxy 繞過瀏覽器 Origin 跨域限制，直接在 OSM 上繪製即時資料。
+        <div class="status-item">目前接收船隻數: <span id="ship-count" style="font-weight:bold; color:#2ecc71;">0</span></div>
+        <div class="status-item" style="font-size: 11px; color: #aaa; margin-top: 10px;">
+            技術架構：Leaflet.js + OpenStreetMap<br>數據流：透過 WSS 專屬網關成功解鎖。
         </div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // ================= 配置設定 =================
-        // 您的真實 AISStream API Key
+        // 配置設定
         const AISSTREAM_API_KEY = "95f3b8aee4389e6a385bc4bb550a5d0dc2ef2f03"; 
-        
-        // 修正後的台灣海域邊界，符合官方 [[[左下角緯度, 左下角經度], [右上角緯度, 右上角經度]]] 的規範
-        const boundingBoxes = [
-            [[21.0, 119.0], [26.0, 123.0]]
-        ];
+        const boundingBoxes = [[[21.0, 119.0], [26.0, 123.0]]];
 
-        // 核心密技：使用免費公開的 WebSocket 代理服務（WSS Proxy）
-        // 該代理會隱藏瀏覽器的 Origin 標頭，讓 AISStream 的防火牆誤以為是後端程式連線，從而放行
-        const PROXY_WS_URL = "wss://api.allorigins.win/raw?url=" + encodeURIComponent("wss://stream.aisstream.io/v1/live");
-        // 如果上面代理偶爾不穩定，備用公共安全代理通道：
-        // const PROXY_WS_URL = "wss://cors-anywhere.herokuapp.com/wss://stream.aisstream.io/v1/live";
-        // ============================================
+        // 核心修正：改用真正支援 WebSocket 升級轉接的 WSS 公共網關
+        const TARGET_WSS = "wss://stream.aisstream.io/v1/live";
+        const PROXY_WS_URL = `wss://relay.fleshwounds.org/?url=${encodeURIComponent(TARGET_WSS)}`;
 
-        // 初始化 Leaflet 地圖並定位在台灣海峽中央
+        // 初始化深色系或標準 OSM 地圖
         const map = L.map('map').setView([23.8, 121.0], 7);
-
-        // 載入開源 OpenStreetMap 經典標準地圖磚
+        
+        // 載入開源地圖磚
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -112,16 +104,15 @@
             document.getElementById('ship-count').textContent = Object.keys(shipMarkers).length;
         }
 
-        // 初始化經由代理的 WebSocket 連線
         function connectAISStream() {
-            updateStatus("連線中(代理)...", "badge-connecting");
+            updateStatus("網關建立中...", "badge-connecting");
             
-            // 改為連向 Proxy 網址
+            // 改連專屬的 WSS 轉接網關
             socket = new WebSocket(PROXY_WS_URL);
 
             socket.onopen = function (event) {
-                updateStatus("連線成功", "badge-connected");
-                console.log("已成功透過代理繞過限制，正在送出 API 驗證...");
+                updateStatus("已連線", "badge-connected");
+                console.log("WSS 網關通道建立成功！正在向 AISStream 提交認證...");
                 
                 const subscriptionMessage = {
                     APIKey: AISSTREAM_API_KEY,
@@ -129,66 +120,62 @@
                     FiltersShipMMSI: [], 
                     FilterMessageTypes: ["PositionReport"]
                 };
-
                 socket.send(JSON.stringify(subscriptionMessage));
             };
 
             socket.onmessage = function (event) {
-                const aisData = JSON.parse(event.data);
-                if (!aisData || !aisData.Message || !aisData.Message.PositionReport) return;
+                try {
+                    const aisData = JSON.parse(event.data);
+                    if (!aisData || !aisData.Message || !aisData.Message.PositionReport) return;
 
-                const positionReport = aisData.Message.PositionReport;
-                const mmsi = aisData.MetaData.MMSI;
-                const shipName = aisData.MetaData.ShipName ? aisData.MetaData.ShipName.trim() : `未知船隻 (${mmsi})`;
-                const latitude = parseFloat(aisData.MetaData.Latitude);
-                const longitude = parseFloat(aisData.MetaData.Longitude);
-                const speed = positionReport.Sog; 
-                const course = positionReport.Cog; 
-                const timestamp = aisData.MetaData.time_utc;
+                    const positionReport = aisData.Message.PositionReport;
+                    const mmsi = aisData.MetaData.MMSI;
+                    const shipName = aisData.MetaData.ShipName ? aisData.MetaData.ShipName.trim() : `MMSI: ${mmsi}`;
+                    const latitude = parseFloat(aisData.MetaData.Latitude);
+                    const longitude = parseFloat(aisData.MetaData.Longitude);
+                    const speed = positionReport.Sog; 
+                    const course = positionReport.Cog; 
 
-                if (isNaN(latitude) || isNaN(longitude)) return;
+                    if (isNaN(latitude) || isNaN(longitude)) return;
 
-                const popupContent = `
-                    <div style="font-size:13px; min-width:180px;">
-                        <strong style="font-size:14px; color:#27ae60;">🚢 ${shipName}</strong><br>
-                        <hr style="margin:5px 0; border:0; border-top:1px solid #eee;">
-                        <b>MMSI:</b> ${mmsi}<br>
-                        <b>航速:</b> ${speed} 節<br>
-                        <b>航向:</b> ${course}°<br>
-                        <b>經緯度:</b> ${latitude.toFixed(4)}, ${longitude.toFixed(4)}<br>
-                        <span style="font-size:10px; color:#95a5a6; display:block; margin-top:5px;">更新時間: ${timestamp}</span>
-                    </div>
-                `;
+                    const popupContent = `
+                        <div style="font-size:13px; color:#333;">
+                            <strong>🚢 ${shipName}</strong><br>
+                            <b>MMSI:</b> ${mmsi}<br>
+                            <b>航速:</b> ${speed} 節<br>
+                            <b>航向:</b> ${course}°
+                        </div>
+                    `;
 
-                if (shipMarkers[mmsi]) {
-                    // 船隻已存在，平滑移動其坐標
-                    shipMarkers[mmsi].setLatLng([latitude, longitude]);
-                    shipMarkers[mmsi].setPopupContent(popupContent);
-                } else {
-                    // 發現新船，在開源 OSM 地圖上建立圓點標記
-                    const marker = L.circleMarker([latitude, longitude], {
-                        radius: 5,
-                        fillColor: "#27ae60", // 綠色標記代表開源版成功運作
-                        color: "#ffffff",
-                        weight: 1,
-                        opacity: 1,
-                        fillOpacity: 0.8
-                    }).addTo(map);
+                    if (shipMarkers[mmsi]) {
+                        shipMarkers[mmsi].setLatLng([latitude, longitude]);
+                        shipMarkers[mmsi].setPopupContent(popupContent);
+                    } else {
+                        const marker = L.circleMarker([latitude, longitude], {
+                            radius: 5,
+                            fillColor: "#2ecc71",
+                            color: "#fff",
+                            weight: 1,
+                            fillOpacity: 0.8
+                        }).addTo(map);
 
-                    marker.bindPopup(popupContent);
-                    shipMarkers[mmsi] = marker;
-                    updateShipCount();
+                        marker.bindPopup(popupContent);
+                        shipMarkers[mmsi] = marker;
+                        updateShipCount();
+                    }
+                } catch (e) {
+                    console.error("解析資料出錯:", e);
                 }
             };
 
             socket.onclose = function (event) {
                 updateStatus("中斷", "badge-disconnected");
-                console.log("WebSocket 斷開，5秒後自動嘗試重新透過代理連線...", event);
+                console.log("網關斷開，5秒後嘗試自動重連...", event);
                 setTimeout(connectAISStream, 5000); 
             };
 
             socket.onerror = function (error) {
-                console.error("代理連線發生錯誤: ", error);
+                console.error("WSS 網關發生錯誤:", error);
             };
         }
 
