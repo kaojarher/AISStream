@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>全球船舶即時追蹤系統</title>
     <style>
-        /* 強制重設瀏覽器預設樣式，避免高度被壓縮為0 */
         * {
             box-sizing: border-box;
             margin: 0;
@@ -22,7 +21,7 @@
             display: flex;
             flex-direction: column;
             width: 100%;
-            height: 100vh; /* 確保主容器填滿整個螢幕高度 */
+            height: 100vh;
         }
         header {
             background-color: #2c3e50;
@@ -49,7 +48,6 @@
             50% { opacity: 1; }
             100% { opacity: 0.6; }
         }
-        /* 核心修復：使用絕對與彈性定位，確保內嵌地圖 100% 顯示，絕不全白 */
         .map-wrapper {
             width: 100%;
             flex-grow: 1;
@@ -70,7 +68,7 @@
 
     <div class="container">
         <header>
-            <span>⚓ 全球船舶即時追蹤系統 (GitHub 免費部署版)</span>
+            <span>⚓ 全球船舶即時追蹤系統 (GitHub 免費部署版)</span>	<Center>本工具由高嘉和2026編寫</Center>
             <span class="live-tag">● LIVE 即時雷達</span>
         </header>
         
@@ -78,10 +76,13 @@
             <iframe 
                 name="vesselfinder" 
                 id="vesselfinder" 
-                src="https://www.vesselfinder.com/aismap?zoom=7&lat=23.8&lon=121.0&width=100%&height=100%&names=true&clicktoact=false&store_pos=true">
+                src="https://www.vesselfinder.com/aismap?zoom=7&lat=23.8&lon=121.0&names=true&clicktoact=false&store_pos=true">
             </iframe>
         </div>
     </div>
+
+
+
 
 </body>
 </html>
