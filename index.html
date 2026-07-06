@@ -68,7 +68,7 @@
         <div class="status-item">系統狀態: <span id="conn-status" class="badge badge-disconnected">中斷</span></div>
         <div class="status-item">目前接收船隻數: <span id="ship-count" style="font-weight:bold; color:#2ecc71;">0</span></div>
         <div class="status-item" style="font-size: 11px; color: #aaa; margin-top: 10px;">
-            技術架構：Leaflet.js + OpenStreetMap<br>數據流：透過 WSS 專屬網關成功解鎖。
+            技術架構：Leaflet.js + OpenStreetMap<br>數據流：直連 AISStream 官方 WSS 端點。
         </div>
     </div>
 
@@ -78,9 +78,9 @@
         const AISSTREAM_API_KEY = "95f3b8aee4389e6a385bc4bb550a5d0dc2ef2f03"; 
         const boundingBoxes = [[[21.0, 119.0], [26.0, 123.0]]];
 
-        // 核心修正：改用真正支援 WebSocket 升級轉接的 WSS 公共網關
-        const TARGET_WSS = "wss://stream.aisstream.io/v1/live";
-        const PROXY_WS_URL = `wss://relay.fleshwounds.org/?url=${encodeURIComponent(TARGET_WSS)}`;
+        // 修正：直接連線到 AISStream 官方端點，不需要第三方代理
+        // 瀏覽器 WebSocket 沒有 CORS 限制，可直接建立連線
+        const AISSTREAM_WSS_URL = "wss://stream.aisstream.io/v0/stream";
 
         // 初始化深色系或標準 OSM 地圖
         const map = L.map('map').setView([23.8, 121.0], 7);
@@ -107,12 +107,12 @@
         function connectAISStream() {
             updateStatus("網關建立中...", "badge-connecting");
             
-            // 改連專屬的 WSS 轉接網關
-            socket = new WebSocket(PROXY_WS_URL);
+            // 直接連線官方端點
+            socket = new WebSocket(AISSTREAM_WSS_URL);
 
             socket.onopen = function (event) {
                 updateStatus("已連線", "badge-connected");
-                console.log("WSS 網關通道建立成功！正在向 AISStream 提交認證...");
+                console.log("WebSocket 連線成功！正在向 AISStream 提交認證...");
                 
                 const subscriptionMessage = {
                     APIKey: AISSTREAM_API_KEY,
@@ -170,12 +170,12 @@
 
             socket.onclose = function (event) {
                 updateStatus("中斷", "badge-disconnected");
-                console.log("網關斷開，5秒後嘗試自動重連...", event);
+                console.log("連線斷開，5秒後嘗試自動重連...", event);
                 setTimeout(connectAISStream, 5000); 
             };
 
             socket.onerror = function (error) {
-                console.error("WSS 網關發生錯誤:", error);
+                console.error("WebSocket 發生錯誤:", error);
             };
         }
 
